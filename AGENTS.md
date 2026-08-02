@@ -1,83 +1,178 @@
-# AGENTS.md — 风电设备预警模块 · 全局 AI 编码规范
+# AGENTS.md — 前端 AI 编码规范
 
-> 本文件是所有 AI 编码工具（Trae Solo / Trae / Cursor 等）的共同规则入口。
-> 前端开发者请额外阅读 `frontend/AGENTS.md`；后端开发者请额外阅读 `backend/AGENTS.md`。
+> 开发前必须完整阅读：
+> 1. `../API_CONTRACT.md` — 接口契约
+> 2. `SPEC.md` — 前端开发规格书
 
 ---
 
-## 一、项目概述
+## 一、技术栈锁定
 
-风电设备预警模块：4 个页面（预警信息看板、工单弹窗、预警历史、模型管理），淡蓝色风格，前后端分离。
-部件系统覆盖齿轮箱、发电机、叶片、变桨、偏航、液压 6 大系统。
-
-## 二、技术栈
-
-| 层级 | 技术 | 版本 |
-|------|------|------|
-| 前端 | React + TypeScript + Vite + Ant Design 5 | React 18 / AntD 5.20 |
-| 后端 | FastAPI + SQLite + Pydantic 2 + APScheduler | FastAPI 0.111 |
-| HTTP | axios（前端）| - |
+- **框架**: React 18 + TypeScript
+- **构建**: Vite 5
+- **UI 库**: Ant Design 5（`antd@^5.20.0`）
+- **图标**: `@ant-design/icons`
+- **路由**: `react-router-dom@6`
+- **HTTP**: axios（封装 `src/api/client.ts`，baseURL = `/api`，Mock 拦截）
+- **日期**: dayjs
+- **数据来源**: 开发阶段用 Mock，联调阶段切真实后端
 
 **禁止替换以上技术选型**，除非用户明确要求。
 
-## 三、目录结构与分工
+---
+
+## 二、编码规范
+
+- **缩进**: 2 空格
+- **引号**: 单引号 `'`
+- **命名**: 变量 `camelCase`；组件 `PascalCase`
+- **文件名**: `PascalCase.tsx`（组件）/ `lowercase.ts`（工具/类型）
+- **语言**: 代码注释用英文；用户可见文案用中文
+
+```typescript
+// ✅ API 调用走 client.ts
+import { apiClient } from '@/api/client';
+const { data } = await apiClient.get<AlertListResponse>('/alerts');
+const { data } = await apiClient.get<ModelListResponse>('/models');
+
+// ✅ 类型从 types/index.ts 导入
+import type { Alert, AIModel, Priority } from '@/types';
+
+// ❌ 禁止硬编码 URL
+axios.get('http://localhost:8000/api/alerts')
+
+// ❌ 禁止内联重复类型
+interface Alert { id: string; ... }
+```
+
+---
+
+## 三、UI 规范
+
+### 淡蓝色主题
+
+主题 token 集中在 `src/theme.ts`，通过 ConfigProvider 全局生效。
+
+- 主色：`#3b82f6`
+- 页面背景：`#f0f7ff`
+- 禁止使用紫色/绿色/橙色作为主色调（标签除外）
+
+### 优先级颜色编码
+
+| 优先级 | 颜色 | Hex |
+|--------|------|-----|
+| 一级（紧急） | 红 | `#ef4444` |
+| 二级（警告） | 橙 | `#f59e0b` |
+| 三级（提示） | 蓝 | `#3b82f6` |
+
+### 模型状态颜色编码
+
+| 模型状态 | 颜色 | Hex / Tag color |
+|----------|------|-----------------|
+| 运行中 | 绿 | `#52c41a`（Tag color = `green`） |
+| 已停止 | 灰 | 默认色（Tag color = `default`） |
+| 异常 | 红 | `#ef4444`（Tag color = `red`） |
+
+### 部件系统 Tag 颜色编码
+
+| 系统 | Tag color |
+|------|-----------|
+| 齿轮箱系统 | `orange` |
+| 发电机系统 | `blue` |
+| 叶片系统 | `green` |
+| 变桨系统 | `purple` |
+| 偏航系统 | `cyan` |
+| 液压系统 | `gold` |
+
+### 组件规范
+
+- **导航**: 顶部 `<TopNav>`，3 个 tab（预警信息 / 预警历史 / 模型管理），当前页高亮
+- **卡片**: 左边框颜色对应优先级
+- **弹窗**: AntD `Modal`，蓝边框 + 渐变标题栏
+- **表格**: 状态列用 `Tag` 彩色标签
+- **分页**: 默认每页 10 条
+- **模型管理页**:
+  - 模型列表用 `Table`，列含：名称、适用部件（Tag）、运行周期、状态（彩色 Tag）、上次运行时间、操作
+  - "上传模型"按钮打开 `Modal` + `Form`，字段：名称（Input）、适用部件（Select 6 系统）、运行周期（Select: 每小时/每日/每周/每月）、描述（TextArea）、模型文件（Upload，仅 .py）
+  - 每行操作按钮：启动/停止（toggle，根据当前状态切换文案）、运行（run）、编辑（edit，复用 Modal Form，文件字段只读）、删除（Popconfirm 确认）
+  - 状态 Tag 颜色严格按上方模型状态颜色编码表
+  - 适用部件 Tag 颜色严格按上方部件系统颜色编码表
+
+### 禁止事项
+
+- ❌ 禁止 Tailwind CSS / styled-components / emotion
+- ❌ 禁止引入额外 UI 库
+- ❌ 禁止在页面组件内直接写 `fetch` / `axios`
+- ❌ 禁止修改优先级颜色编码
+- ❌ 禁止修改模型状态颜色编码
+- ❌ 禁止上传非 .py 文件（前端 Upload accept 需限定 `.py`）
+
+---
+
+## 四、Mock 数据规范
+
+- Mock 数据集中在 `src/api/mock/` 目录
+- 11 条预警数据 **禁止修改内容**
+- 2 条模型数据 **禁止修改内容**
+- 预设建议模板 6 个系统 **禁止删减**
+- KPI 由前端 `filter + reduce` 自动计算
+- 工单生成后同步更新 `has_work_order = true`
+- 模型启停 / 运行后同步更新 `status` 和 `last_run_at`
+- 模型 ID 自增，新建模型初始状态为"已停止"，`last_run_at` 为 `null`
+
+---
+
+## 五、质量门禁
+
+- [ ] 无 TypeScript 编译错误
+- [ ] 无硬编码 API 地址
+- [ ] 主题颜色统一（淡蓝色 #3b82f6）
+- [ ] 优先级标签颜色正确（红/橙/蓝）
+- [ ] 模型状态标签颜色正确（绿/灰/红）
+- [ ] 部件系统标签颜色正确（按系统映射表）
+- [ ] 4 个页面路由跳转正常
+- [ ] Mock 数据 11 条预警完整
+- [ ] Mock 数据 2 条模型完整
+- [ ] 6 个系统预设建议完整
+- [ ] 模型上传仅接受 .py 文件
+- [ ] 模型删除有 Popconfirm 确认
+- [ ] 模型启动/停止/运行/编辑/删除操作均可正常调用 Mock 接口
+- [ ] `npm run dev` 启动无报错
+- [ ] Vite proxy 配置就绪（联调用）
+
+---
+
+## 六、开发顺序
 
 ```
-wind-warning/
-├── frontend/          # 成员 A 负责（Trae Solo 开发）
-│   ├── src/
-│   │   ├── types/     # TypeScript 类型定义
-│   │   ├── api/       # axios 封装 + Mock 拦截
-│   │   ├── pages/     # 4 个页面组件
-│   │   ├── components/# 通用组件
-│   │   └── theme.ts   # 淡蓝色主题
-│   └── AGENTS.md      # 前端 AI 编码规范
-│
-├── backend/           # 成员 B 负责（Trae 开发）
-│   ├── routers/       # API 路由（预警 4 个 + 模型管理 7 个）
-│   ├── database.py    # SQLite 连接 + 建表（3 张表）
-│   ├── seed.py        # 种子数据（11 预警 + 2 模型）
-│   ├── suggestions.py # 预设建议模板
-│   ├── model_scheduler.py # APScheduler 定时调度
-│   ├── uploads/       # 模型文件上传目录
-│   └── AGENTS.md      # 后端 AI 编码规范
-│
-├── API_CONTRACT.md    # 前后端共享接口契约（双方必读）
-├── AGENTS.md          # 本文件（全局规范）
-└── .pre-commit-config.yaml
+Step 1: 项目搭建 + 导航栏 + 主题配置（8min）
+Step 2: Mock 数据（11 条预警 + 2 条模型）+ 预设建议模板 + axios 封装（12min）
+Step 3: 页面一 预警信息页（15min）
+Step 4: 页面二 工单弹窗（12min）
+Step 5: 页面三 预警历史页（15min）
+Step 6: 页面四 模型管理页（表格 + 上传/编辑弹窗 + 启停/运行/删除）（18min）
+Step 7: 联调验证（10min）
 ```
 
-### 分工原则
+---
 
-- **成员 A**：只动 `frontend/` 目录，AI 工具启动目录锁定在 `frontend/` 内
-- **成员 B**：只动 `backend/` 目录，AI 工具启动目录锁定在 `backend/` 内
-- **共享文件**：`API_CONTRACT.md` 修改前需通知对方
+## 七、禁止做
 
-## 四、AI 行为约束
+- ❌ 禁止调用任何外部 API
+- ❌ 禁止新增第三方依赖（除 SPEC.md 列出的）
+- ❌ 禁止修改 Mock 数据内容（11 条预警 + 2 条模型）
+- ❌ 禁止删减预设建议模板
+- ❌ 禁止引入 Tailwind / styled-components
+- ❌ 禁止修改接口字段名（以 API_CONTRACT.md 为准）
+- ❌ 禁止上传非 .py 模型文件
 
-- 禁止修改本职责目录之外的文件
-- 禁止直接修改 main 分支
-- 生成的代码必须能通过 pre-commit 检查
-- Commit message 使用 Conventional Commits 格式（`feat:` / `fix:` / `refactor:`）
-- 禁止引入 SPEC.md 未列出的第三方依赖
+---
 
-## 五、接口契约
+## 八、遇到歧义时
 
-所有 API 字段名、类型、响应格式以 `API_CONTRACT.md` 为准，任何一方不得单方面修改。
-
-## 六、构建与测试
-
-| 操作 | 前端 | 后端 |
-|------|------|------|
-| 安装依赖 | `npm install` | `pip install -r requirements.txt` |
-| 启动开发 | `npm run dev` (port 5173) | `uvicorn main:app --reload --port 8000` |
-| 初始化数据 | - | `python seed.py` |
-| Lint | `npx eslint src/` | `ruff check .` |
-| 构建 | `npm run build` | - |
-
-## 七、遇到歧义时
-
-1. **接口字段** → `API_CONTRACT.md`
-2. **前端实现** → `frontend/SPEC.md`
-3. **后端实现** → `backend/SPEC.md`
-4. **以上都未覆盖** → 向用户提问
+1. **接口字段** → `../API_CONTRACT.md`
+2. **类型定义** → `SPEC.md` 第二节
+3. **Mock 数据** → `SPEC.md` 第三、五节
+4. **主题与颜色** → `SPEC.md` 第七节
+5. **组件选型** → `SPEC.md` 第八节
+6. **以上都未覆盖** → 向用户提问
